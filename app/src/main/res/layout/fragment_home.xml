@@ -62,25 +62,11 @@
 
     <EditText
         android:id="@+id/Tag"
-        android:layout_width="200dp"
+        android:layout_width="100dp"
         android:layout_height="50dp"
         android:ems="10"
         android:inputType="text"
-        android:text="@string/tags"
-
-        android:layout_marginStart="20dp"
-
-        app:layout_constraintStart_toEndOf="@id/Add_Tag"
-        app:layout_constraintTop_toTopOf="@id/Add_Tag"
-        />
-
-    <Button
-        android:id="@+id/Add_Tag"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:text="+"
-        android:textSize="20sp"
-        android:backgroundTint="#2196F3"
+        android:text="#タグ"
 
         android:layout_marginTop="20dp"
 
@@ -90,14 +76,13 @@
 
     <ImageView
         android:id="@+id/Send"
-        android:layout_width="60dp"
-        android:layout_height="60dp"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@android:drawable/ic_menu_send"
+
         android:layout_marginStart="20dp"
 
-        android:background="#2196F3"
-        android:src="@android:drawable/ic_menu_send"
         app:layout_constraintStart_toEndOf="@id/Open_Folder"
         app:layout_constraintTop_toTopOf="@id/Open_Folder"
-        app:layout_constraintBottom_toBottomOf="@id/Open_Folder"
         />
 </androidx.constraintlayout.widget.ConstraintLayout>
