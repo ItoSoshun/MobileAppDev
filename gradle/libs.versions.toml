@@ -13,6 +13,7 @@ navigationUi = "2.6.0"
 navigationFragmentVersion = "2.4.2"
 navigationUiVersion = "2.9.3"
 androidxNavigationFragment = "2.9.3"
+navigationRuntime = "2.9.3"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -28,6 +29,7 @@ navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version
 androidx-navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "navigationFragmentVersion" }
 androidx-navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigationUiVersion" }
 androidx-navigation-navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "androidxNavigationFragment" }
+androidx-navigation-runtime = { group = "androidx.navigation", name = "navigation-runtime", version.ref = "navigationRuntime" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
