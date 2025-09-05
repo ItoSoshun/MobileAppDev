@@ -74,11 +74,24 @@
 
     <EditText
         android:id="@+id/Tag"
-        android:layout_width="100dp"
+        android:layout_width="200dp"
         android:layout_height="50dp"
         android:ems="10"
         android:inputType="text"
-        android:text="#タグ"
+        android:text="@string/tags"
+
+        android:layout_marginStart="20dp"
+
+        app:layout_constraintStart_toEndOf="@id/Add_Tag"
+        app:layout_constraintTop_toTopOf="@id/Add_Tag"
+        />
+
+    <Button
+        android:id="@+id/Add_Tag"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:text="＋"
+        android:textSize="20dp"
 
         android:layout_marginTop="20dp"
 
