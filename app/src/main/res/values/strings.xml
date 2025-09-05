@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nanndatteii</string>
-    <string name="title_home">Home</string>
-    <string name="title_dashboard">Dashboard</string>
+    <string name="app_name">投げたっていい</string>
+    <string name="title_home">投げる</string>
+    <string name="title_dashboard">見る</string>
 </resources>
