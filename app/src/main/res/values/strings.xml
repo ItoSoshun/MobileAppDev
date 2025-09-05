@@ -1,3 +1,6 @@
 <resources>
-    <string name="app_name">Nanndatteii</string>
+    <string name="app_name">Nandatteii2</string>
+    <string name="title_home">投げる</string>
+    <string name="title_dashboard">見る</string>
+    <string name="title_notifications">設定</string>
 </resources>
