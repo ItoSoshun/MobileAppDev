@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 import jp.ac.meijou.android.nanndatteii.databinding.FragmentHomeBinding;
+import jp.ac.meijou.android.nanndatteii.R;
 
 public class HomeFragment extends Fragment
 {
@@ -80,10 +81,20 @@ public class HomeFragment extends Fragment
 
         openCameraButton.setOnClickListener(v -> {
             // Download/MyAppPhotos フォルダに保存
+            File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            String folderName = requireContext().getString(R.string.photo_folder_name);
+            String relativePath = "Download/" + folderName;
+
+            File photoDir = new File(downloadsDir, folderName);
+
+            if (!photoDir.exists()) {
+                photoDir.mkdirs();
+            }
+
             ContentValues values = new ContentValues();
             values.put(MediaStore.Downloads.DISPLAY_NAME, "photo_" + System.currentTimeMillis() + ".jpg");
             values.put(MediaStore.Downloads.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.Downloads.RELATIVE_PATH, "Download/MyAppPhotos"); // メモと同じ場所
+            values.put(MediaStore.Downloads.RELATIVE_PATH, relativePath); // メモと同じ場所
 
             photoUri = requireContext().getContentResolver().insert(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
@@ -97,11 +108,28 @@ public class HomeFragment extends Fragment
         binding.SendButton.setOnClickListener(v -> {
             memoText = binding.Textbox.getText().toString();
 
-            String fileName = "memo_" + System.currentTimeMillis() + ".txt";
+            // [必須] フォルダ名・タグ名取得
+            String folderName = requireContext().getString(R.string.photo_folder_name);
+            String tagName = requireContext().getString(R.string.Tags);
+
+            // [必須] サブフォルダパス生成
+            String relativePath = "Download/" + folderName + "/" + tagName;
+
+            // [必須] サブフォルダも物理的に作成（API 29未満用、API 29以上はRELATIVE_PATHで自動作成）
+            File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File tagDir = new File(downloadsDir, folderName + "/" + tagName);
+            if (!tagDir.exists()) {
+                tagDir.mkdirs();
+            }
+
+            // [必須] ファイル名生成
+            String timeStamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+            String fileName = tagName + "_" + timeStamp + ".txt";
+
             ContentValues values = new ContentValues();
             values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
             values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
-            values.put(MediaStore.Downloads.RELATIVE_PATH, "Download/MyAppPhotos"); // Download配下に保存
+            values.put(MediaStore.Downloads.RELATIVE_PATH, relativePath); // サブフォルダに保存
 
             Uri textUri = null;
             try {

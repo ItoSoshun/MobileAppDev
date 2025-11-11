@@ -33,11 +33,20 @@ public class DashboardFragment extends Fragment
         RecyclerView recyclerView = root.findViewById(R.id.fileRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
+  // [必須] strings.xmlからフォルダ名を取得
+        String photoFolderName = getContext().getString(R.string.photo_folder_name);
+
+        // 保存先パス生成例
+        File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File photoDir = new File(downloadsDir, photoFolderName);
+
         // Download/MyAppPhotos フォルダのファイル一覧取得
-        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MyAppPhotos");
+        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), photoFolderName);
         List<File> fileList = (dir.exists() && dir.isDirectory())
                 ? Arrays.asList(dir.listFiles())
                 : Collections.emptyList();
+
+      
 
         FileAdapter adapter = new FileAdapter(getContext(), fileList);
         recyclerView.setAdapter(adapter);
