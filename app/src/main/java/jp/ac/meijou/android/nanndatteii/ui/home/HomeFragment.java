@@ -40,6 +40,9 @@ public class HomeFragment extends Fragment
     private Uri photoUri;
     private String memoText = ""; // [必須] メモ内容を保持する変数
 
+    // [必須] Tagsの値を保持する変数
+    private String currentTag;
+
     // カメラ起動用ランチャー
     private ActivityResultLauncher<Intent> cameraLauncher;
 
@@ -104,13 +107,28 @@ public class HomeFragment extends Fragment
             cameraLauncher.launch(intent);
         });
 
+        // 初期値をstrings.xmlから取得
+        currentTag = requireContext().getString(R.string.Tags);
+
+        // Add_Tagボタンの処理
+        binding.AddTag.setOnClickListener(v -> {
+            // 例: EditTextからタグ名を取得して更新
+            String newTag = binding.TextTag.getText().toString().trim();
+            if (!newTag.isEmpty()) {
+                currentTag = newTag;
+                Toast.makeText(requireContext(), "タグを更新しました: " + currentTag, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(requireContext(), "タグ名を入力してください", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         // SendButtonの処理
         binding.SendButton.setOnClickListener(v -> {
             memoText = binding.Textbox.getText().toString();
 
             // [必須] フォルダ名・タグ名取得
             String folderName = requireContext().getString(R.string.photo_folder_name);
-            String tagName = requireContext().getString(R.string.Tags);
+            String tagName = currentTag; // ここでcurrentTagを使用
 
             // [必須] サブフォルダパス生成
             String relativePath = "Download/" + folderName + "/" + tagName;
