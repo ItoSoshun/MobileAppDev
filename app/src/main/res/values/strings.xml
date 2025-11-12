@@ -2,6 +2,6 @@
     <string name="app_name">投げたっていい。</string>
     <string name="title_home">Home</string>
     <string name="title_dashboard">Files</string>
-    <string name="Tags">#お気に入り</string>
+    <string name="Tags">お気に入り</string>
     <string name="photo_folder_name">投げたっていい。</string> <!-- [必須] 追加 -->
 </resources>
