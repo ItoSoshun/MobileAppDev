@@ -10,11 +10,45 @@
         android:id="@+id/fileRecyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:layout_marginTop="100dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:padding="8dp"
         tools:listitem="@layout/item_file" />
+
+    <Button
+        android:id="@+id/OpenTags"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="見たっていい。"
+        android:layout_marginBottom="20dp"
+        android:layout_marginStart="20dp"
+        app:layout_constraintBottom_toTopOf="@id/fileRecyclerView"
+        app:layout_constraintStart_toStartOf="parent"
+        />
+
+    <Spinner
+        android:id="@+id/SetTags"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        app:layout_constraintBottom_toBottomOf="@id/OpenTags"
+        app:layout_constraintStart_toEndOf="@id/OpenTags"
+        app:layout_constraintTop_toTopOf="@+id/OpenTags" />
+
+    <Button
+        android:id="@+id/button2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="消したっていい！"
+        android:textSize="20dp"
+        android:visibility="invisible"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
