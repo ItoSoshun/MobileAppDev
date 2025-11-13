@@ -1,564 +1,459 @@
 # 実装ガイド
 
-## 概要
+## 実装状況
 
-このドキュメントでは、「投げたっていい。」アプリを新しいデータベース・ファイルストレージ設計で実装する手順を説明します。
+現在、以下のフェーズが完了しています：
 
-## 実装フェーズ
+- **Phase 0**: Room依存関係の追加 ✓
+- **Phase 1**: データベース実装（Entity、DAO、Relation、AppDatabase） ✓
+- **Phase 2**: ファイルストレージ実装（FileStorageManager） ✓
+- **Phase 3**: リポジトリパターン実装（ItemRepository、TagRepository） ✓
+- **Phase 4**: UI層更新（HomeFragment、DashboardFragment、ItemAdapter） ✓
 
-### Phase 0: 準備（1-2日）
+次のステップは Phase 5（テストと最適化）です。
 
-#### 依存関係の追加
+---
 
-`gradle/libs.versions.toml` に Room の依存関係を追加します。
+## Phase 5: テストと最適化
 
-```toml
-[versions]
-room = "2.6.1"
+### 概要
 
-[libraries]
-androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-```
+アプリケーションの品質を確保するため、単体テスト、統合テスト、パフォーマンステストを実施します。
 
-`app/build.gradle` に追加:
+### ステップ5.1: 単体テスト
 
-```gradle
-dependencies {
-    // 既存の依存関係...
+#### DAOのテスト
 
-    // Room Database
-    implementation libs.androidx.room.runtime
-    annotationProcessor libs.androidx.room.compiler
-    implementation libs.androidx.room.ktx
+各DAOの基本的なCRUD操作をテストします。
+
+**テスト対象:**
+- ItemDao
+- FileDao
+- TagDao
+- ItemTagDao
+
+**テストケース例:**
+
+```java
+@RunWith(AndroidJUnit4.class)
+public class ItemDaoTest {
+    private AppDatabase database;
+    private ItemDao itemDao;
+
+    @Before
+    public void createDb() {
+        Context context = ApplicationProvider.getApplicationContext();
+        database = Room.inMemoryDatabaseBuilder(context, AppDatabase.class).build();
+        itemDao = database.itemDao();
+    }
+
+    @After
+    public void closeDb() {
+        database.close();
+    }
+
+    @Test
+    public void insertAndGetItem() {
+        Item item = new Item();
+        item.setDescription("テストアイテム");
+        item.setCreatedAt(System.currentTimeMillis());
+        item.setUpdatedAt(System.currentTimeMillis());
+
+        long itemId = itemDao.insert(item);
+        Item retrieved = itemDao.getItemByIdSync(itemId);
+
+        assertNotNull(retrieved);
+        assertEquals("テストアイテム", retrieved.getDescription());
+    }
+
+    @Test
+    public void deleteItem() {
+        Item item = new Item();
+        item.setDescription("削除テスト");
+        item.setCreatedAt(System.currentTimeMillis());
+        item.setUpdatedAt(System.currentTimeMillis());
+
+        long itemId = itemDao.insert(item);
+        Item retrieved = itemDao.getItemByIdSync(itemId);
+        itemDao.delete(retrieved);
+
+        Item deleted = itemDao.getItemByIdSync(itemId);
+        assertNull(deleted);
+    }
 }
 ```
 
-#### プロジェクト構造の準備
+#### FileStorageManagerのテスト
 
+ファイルの保存、取得、削除をテストします。
+
+```java
+@RunWith(AndroidJUnit4.class)
+public class FileStorageManagerTest {
+    private FileStorageManager storageManager;
+    private Context context;
+
+    @Before
+    public void setup() {
+        context = ApplicationProvider.getApplicationContext();
+        storageManager = new FileStorageManager(context);
+    }
+
+    @Test
+    public void saveAndGetFile() throws IOException {
+        String testContent = "テストコンテンツ";
+        InputStream inputStream = new ByteArrayInputStream(testContent.getBytes());
+
+        SavedFile savedFile = storageManager.saveFile(inputStream, "text/plain");
+
+        assertNotNull(savedFile);
+        assertNotNull(savedFile.getRelativePath());
+
+        File retrievedFile = storageManager.getFile(savedFile.getRelativePath());
+        assertTrue(retrievedFile.exists());
+    }
+
+    @Test
+    public void deleteFile() throws IOException {
+        String testContent = "削除テスト";
+        InputStream inputStream = new ByteArrayInputStream(testContent.getBytes());
+
+        SavedFile savedFile = storageManager.saveFile(inputStream, "text/plain");
+        boolean deleted = storageManager.deleteFile(savedFile.getRelativePath());
+
+        assertTrue(deleted);
+        File file = storageManager.getFile(savedFile.getRelativePath());
+        assertFalse(file.exists());
+    }
+}
 ```
-app/src/main/java/jp/ac/meijou/android/nanndatteii/
-├── db/
-│   ├── AppDatabase.java (新規)
-│   ├── dao/
-│   │   ├── ItemDao.java (新規)
-│   │   ├── FileDao.java (新規)
-│   │   ├── TagDao.java (新規)
-│   │   └── ItemTagDao.java (新規)
-│   ├── entity/
-│   │   ├── Item.java (新規)
-│   │   ├── ItemFile.java (新規)
-│   │   ├── Tag.java (新規)
-│   │   └── ItemTag.java (新規)
-│   └── relation/
-│       ├── ItemWithFiles.java (新規)
-│       ├── ItemWithTags.java (新規)
-│       └── ItemWithFilesAndTags.java (新規)
-├── storage/
-│   ├── FileStorageManager.java (新規)
-│   └── SavedFile.java (新規)
-└── repository/
-    ├── ItemRepository.java (新規)
-    └── TagRepository.java (新規)
+
+#### Repositoryのテスト
+
+ビジネスロジック層のテストを実施します。
+
+```java
+@RunWith(AndroidJUnit4.class)
+public class ItemRepositoryTest {
+    private ItemRepository repository;
+    private FileStorageManager storageManager;
+
+    @Before
+    public void setup() {
+        Context context = ApplicationProvider.getApplicationContext();
+        repository = new ItemRepository(context);
+        storageManager = new FileStorageManager(context);
+    }
+
+    @Test
+    public void createItemWithFilesAndTags() throws InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(1);
+        final long[] createdItemId = new long[1];
+
+        Item item = new Item();
+        item.setDescription("統合テスト");
+        item.setCreatedAt(System.currentTimeMillis());
+        item.setUpdatedAt(System.currentTimeMillis());
+
+        List<ItemFile> files = new ArrayList<>();
+        List<Long> tagIds = new ArrayList<>();
+        // ファイルとタグを準備...
+
+        repository.createItem(item, files, tagIds, new ItemRepository.OnItemCreatedListener() {
+            @Override
+            public void onSuccess(long itemId) {
+                createdItemId[0] = itemId;
+                latch.countDown();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                fail("アイテム作成に失敗: " + e.getMessage());
+            }
+        });
+
+        latch.await(5, TimeUnit.SECONDS);
+        assertTrue(createdItemId[0] > 0);
+    }
+}
 ```
 
 ---
 
-### Phase 1: データベース実装（3-5日）
+### ステップ5.2: 統合テスト
 
-#### ステップ1.1: Entityクラスの作成
+#### 新規アイテム作成テスト
 
-`database-design.md` を参照して、以下のEntityクラスを作成します:
+写真とメモを含むアイテムの作成フローをテストします。
 
-- `Item.java`
-- `ItemFile.java`
-- `Tag.java`
-- `ItemTag.java`
+**テストシナリオ:**
+1. カメラで写真を撮影
+2. メモを入力
+3. タグを選択
+4. 保存ボタンをクリック
+5. データベースとストレージに正しく保存されることを確認
 
-#### ステップ1.2: DAOインターフェースの作成
+#### タグによるフィルタリングテスト
 
-各エンティティに対応するDAOを作成します:
+**テストシナリオ:**
+1. 複数のアイテムを異なるタグで作成
+2. タグフィルターを適用
+3. 正しいアイテムのみが表示されることを確認
 
-- `ItemDao.java`
-- `FileDao.java`
-- `TagDao.java`
-- `ItemTagDao.java`
+#### ファイル削除テスト
 
-#### ステップ1.3: AppDatabaseクラスの作成
+**テストシナリオ:**
+1. アイテムを作成
+2. アイテムを削除
+3. データベースから削除されることを確認
+4. 物理ファイルも削除されることを確認
+
+#### 複数タグの付与テスト
+
+**テストシナリオ:**
+1. 一つのアイテムに複数のタグを付与
+2. 各タグでフィルタリングしたときに表示されることを確認
+
+---
+
+### ステップ5.3: パフォーマンステスト
+
+#### 大量データのテスト
+
+**テスト内容:**
+- 1000件のアイテムを作成
+- 一覧表示の速度を測定
+- スクロール性能を確認
+- メモリ使用量を監視
+
+**最適化ポイント:**
+1. RecyclerViewのViewHolderパターンの正しい実装
+2. 画像の遅延読み込み
+3. Paging Libraryの検討（将来的な改善）
+
+#### データベースクエリの最適化
+
+**確認項目:**
+- インデックスが正しく設定されているか
+- 不要なクエリが発生していないか
+- N+1問題が発生していないか
+
+**最適化例:**
 
 ```java
-@Database(
-    entities = {Item.class, ItemFile.class, Tag.class, ItemTag.class},
-    version = 1,
-    exportSchema = false
-)
-public abstract class AppDatabase extends RoomDatabase {
-    private static volatile AppDatabase INSTANCE;
+// 悪い例：N+1問題
+List<Item> items = itemDao.getAllItemsSync();
+for (Item item : items) {
+    List<ItemFile> files = fileDao.getFilesByItemIdSync(item.getId());
+    // ...
+}
 
-    public abstract ItemDao itemDao();
-    public abstract FileDao fileDao();
-    public abstract TagDao tagDao();
-    public abstract ItemTagDao itemTagDao();
+// 良い例：Relationを使用
+List<ItemWithFiles> itemsWithFiles = itemDao.getAllItemsWithFiles();
+// 一度のクエリで全データ取得
+```
 
-    public static AppDatabase getInstance(Context context) {
-        if (INSTANCE == null) {
-            synchronized (AppDatabase.class) {
-                if (INSTANCE == null) {
-                    INSTANCE = Room.databaseBuilder(
-                        context.getApplicationContext(),
-                        AppDatabase.class,
-                        "app_data.db"
-                    )
-                    .build();
-                }
+#### ストレージ使用量の監視
+
+**実装例:**
+
+```java
+// ストレージ使用量の取得
+public long getUsedStorageSize() {
+    File rootDir = new File(context.getFilesDir(), STORAGE_ROOT);
+    return calculateDirectorySize(rootDir);
+}
+
+private long calculateDirectorySize(File directory) {
+    long size = 0;
+    if (directory.isDirectory()) {
+        for (File file : directory.listFiles()) {
+            if (file.isFile()) {
+                size += file.length();
+            } else {
+                size += calculateDirectorySize(file);
             }
         }
-        return INSTANCE;
     }
+    return size;
 }
 ```
 
-#### ステップ1.4: Relationクラスの作成
-
-- `ItemWithFiles.java`
-- `ItemWithTags.java`
-- `ItemWithFilesAndTags.java`
-
 ---
 
-### Phase 2: ファイルストレージ実装（2-3日）
+### ステップ5.4: 孤立ファイルのクリーンアップ
 
-#### ステップ2.1: FileStorageManagerの作成
+データベースに登録されていない物理ファイルを検出・削除する機能を実装します。
 
-`file-storage-design.md` を参照して、`FileStorageManager.java` と `SavedFile.java` を作成します。
+**実装例:**
 
-#### ステップ2.2: FileProviderの更新
+```java
+public void cleanupOrphanedFiles(OnCleanupCompletedListener listener) {
+    executorService.execute(() -> {
+        try {
+            // 1. データベースに登録されている全ファイルパスを取得
+            List<String> registeredPaths = fileDao.getAllFilePaths();
+            Set<String> pathSet = new HashSet<>(registeredPaths);
 
-`res/xml/file_paths.xml` を更新し、新しいストレージディレクトリを追加します。
+            // 2. 物理ストレージの全ファイルを列挙
+            List<File> allFiles = storageManager.listAllFiles();
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 新しいプライベートストレージ -->
-    <files-path
-        name="app_files"
-        path="nagetatte/" />
-</paths>
+            // 3. 孤立ファイルを検出して削除
+            int deletedCount = 0;
+            for (File file : allFiles) {
+                String relativePath = storageManager.getRelativePath(file);
+                if (!pathSet.contains(relativePath)) {
+                    if (file.delete()) {
+                        deletedCount++;
+                    }
+                }
+            }
+
+            if (listener != null) {
+                listener.onSuccess(deletedCount);
+            }
+        } catch (Exception e) {
+            if (listener != null) {
+                listener.onError(e);
+            }
+        }
+    });
+}
+
+public interface OnCleanupCompletedListener {
+    void onSuccess(int deletedCount);
+    void onError(Exception e);
+}
 ```
 
 ---
 
-### Phase 3: リポジトリパターンの実装（2-3日）
+### ステップ5.5: エラーハンドリングの改善
 
-#### ステップ3.1: ItemRepositoryの作成
+**実装すべきエラーハンドリング:**
 
+1. **ストレージ容量不足**
 ```java
-package jp.ac.meijou.android.nanndatteii.repository;
+public SavedFile saveFile(InputStream inputStream, String mimeType) throws IOException {
+    // 空き容量チェック
+    StatFs stat = new StatFs(context.getFilesDir().getPath());
+    long availableBytes = stat.getAvailableBytes();
 
-import android.content.Context;
-import androidx.lifecycle.LiveData;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import jp.ac.meijou.android.nanndatteii.db.AppDatabase;
-import jp.ac.meijou.android.nanndatteii.db.dao.*;
-import jp.ac.meijou.android.nanndatteii.db.entity.*;
-import jp.ac.meijou.android.nanndatteii.db.relation.ItemWithFilesAndTags;
-
-public class ItemRepository {
-    private final ItemDao itemDao;
-    private final FileDao fileDao;
-    private final ItemTagDao itemTagDao;
-    private final ExecutorService executorService;
-
-    public ItemRepository(Context context) {
-        AppDatabase db = AppDatabase.getInstance(context);
-        itemDao = db.itemDao();
-        fileDao = db.fileDao();
-        itemTagDao = db.itemTagDao();
-        executorService = Executors.newFixedThreadPool(2);
+    if (availableBytes < MIN_REQUIRED_SPACE) {
+        throw new IOException("ストレージ容量が不足しています");
     }
 
-    // アイテム作成
-    public void createItem(Item item, List<ItemFile> files, List<Long> tagIds, OnItemCreatedListener listener) {
-        executorService.execute(() -> {
-            try {
-                // 1. アイテムを挿入
+    // ファイル保存処理...
+}
+```
+
+2. **データベースエラー**
+```java
+public void createItem(Item item, List<ItemFile> files, List<Long> tagIds,
+                      OnItemCreatedListener listener) {
+    executorService.execute(() -> {
+        try {
+            // トランザクション処理
+            database.runInTransaction(() -> {
                 long itemId = itemDao.insert(item);
 
-                // 2. ファイルを挿入
                 for (ItemFile file : files) {
                     file.setItemId(itemId);
                     fileDao.insert(file);
                 }
 
-                // 3. タグを関連付け
                 for (Long tagId : tagIds) {
                     ItemTag itemTag = new ItemTag();
                     itemTag.setItemId(itemId);
                     itemTag.setTagId(tagId);
                     itemTagDao.insert(itemTag);
                 }
+            });
 
-                if (listener != null) {
-                    listener.onSuccess(itemId);
-                }
-            } catch (Exception e) {
-                if (listener != null) {
-                    listener.onError(e);
-                }
+            if (listener != null) {
+                listener.onSuccess(itemId);
             }
-        });
-    }
-
-    // アイテム取得
-    public LiveData<List<ItemWithFilesAndTags>> getAllItems() {
-        return itemDao.getAllItemsWithFilesAndTags();
-    }
-
-    // タグでフィルタリング
-    public LiveData<List<ItemWithFilesAndTags>> getItemsByTag(long tagId) {
-        return itemDao.getItemsByTagWithFilesAndTags(tagId);
-    }
-
-    // アイテム削除
-    public void deleteItem(long itemId, FileStorageManager storageManager, OnItemDeletedListener listener) {
-        executorService.execute(() -> {
-            try {
-                // 1. ファイルを取得
-                List<ItemFile> files = fileDao.getFilesByItemIdSync(itemId);
-
-                // 2. 物理ファイルを削除
-                for (ItemFile file : files) {
-                    storageManager.deleteFile(file.getFilePath());
-                }
-
-                // 3. データベースから削除（CASCADE設定により関連レコードも自動削除）
-                Item item = itemDao.getItemByIdSync(itemId);
-                itemDao.delete(item);
-
-                if (listener != null) {
-                    listener.onSuccess();
-                }
-            } catch (Exception e) {
-                if (listener != null) {
-                    listener.onError(e);
-                }
+        } catch (Exception e) {
+            Log.e("ItemRepository", "アイテム作成エラー", e);
+            if (listener != null) {
+                listener.onError(e);
             }
-        });
-    }
-
-    public interface OnItemCreatedListener {
-        void onSuccess(long itemId);
-        void onError(Exception e);
-    }
-
-    public interface OnItemDeletedListener {
-        void onSuccess();
-        void onError(Exception e);
-    }
-}
-```
-
-#### ステップ3.2: TagRepositoryの作成
-
-```java
-package jp.ac.meijou.android.nanndatteii.repository;
-
-import android.content.Context;
-import androidx.lifecycle.LiveData;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import jp.ac.meijou.android.nanndatteii.db.AppDatabase;
-import jp.ac.meijou.android.nanndatteii.db.dao.TagDao;
-import jp.ac.meijou.android.nanndatteii.db.entity.Tag;
-
-public class TagRepository {
-    private final TagDao tagDao;
-    private final ExecutorService executorService;
-
-    public TagRepository(Context context) {
-        AppDatabase db = AppDatabase.getInstance(context);
-        tagDao = db.tagDao();
-        executorService = Executors.newSingleThreadExecutor();
-    }
-
-    public LiveData<List<Tag>> getAllTags() {
-        return tagDao.getAllTags();
-    }
-
-    public void insertTag(Tag tag, OnTagInsertedListener listener) {
-        executorService.execute(() -> {
-            try {
-                long tagId = tagDao.insert(tag);
-                if (listener != null) {
-                    listener.onSuccess(tagId);
-                }
-            } catch (Exception e) {
-                if (listener != null) {
-                    listener.onError(e);
-                }
-            }
-        });
-    }
-
-    public void deleteTag(Tag tag, OnTagDeletedListener listener) {
-        executorService.execute(() -> {
-            try {
-                tagDao.delete(tag);
-                if (listener != null) {
-                    listener.onSuccess();
-                }
-            } catch (Exception e) {
-                if (listener != null) {
-                    listener.onError(e);
-                }
-            }
-        });
-    }
-
-    public interface OnTagInsertedListener {
-        void onSuccess(long tagId);
-        void onError(Exception e);
-    }
-
-    public interface OnTagDeletedListener {
-        void onSuccess();
-        void onError(Exception e);
-    }
-}
-```
-
----
-
-### Phase 4: UI層の更新（5-7日）
-
-#### ステップ4.1: HomeFragmentの更新
-
-既存のファイル保存ロジックを新しいRepositoryとFileStorageManagerを使用するように変更します。
-
-**主な変更点:**
-1. カメラ写真の保存先を新しいストレージに変更
-2. テキストメモの保存先を新しいストレージに変更
-3. 複数ファイルを一つのアイテムとして保存
-4. タグの関連付け処理を追加
-
-**実装例:**
-
-```java
-// 新しい保存処理（写真 + メモ）
-private void saveNewItem(Uri photoUri, String memoText, long tagId) {
-    FileStorageManager storageManager = new FileStorageManager(requireContext());
-    ItemRepository repository = new ItemRepository(requireContext());
-
-    List<ItemFile> files = new ArrayList<>();
-    List<Long> tagIds = new ArrayList<>();
-    tagIds.add(tagId);
-
-    try {
-        // 1. 写真を保存
-        if (photoUri != null) {
-            InputStream photoStream = requireContext().getContentResolver().openInputStream(photoUri);
-            SavedFile savedPhoto = storageManager.saveFile(photoStream, "image/jpeg");
-
-            ItemFile photoFile = new ItemFile();
-            photoFile.setFilePath(savedPhoto.getRelativePath());
-            photoFile.setFileName(savedPhoto.getFileName());
-            photoFile.setFileType("IMAGE");
-            photoFile.setFileSize(savedPhoto.getFileSize());
-            photoFile.setMimeType(savedPhoto.getMimeType());
-            photoFile.setCreatedAt(System.currentTimeMillis());
-            files.add(photoFile);
         }
-
-        // 2. メモを保存
-        if (memoText != null && !memoText.isEmpty()) {
-            byte[] textBytes = memoText.getBytes(StandardCharsets.UTF_8);
-            InputStream textStream = new ByteArrayInputStream(textBytes);
-            SavedFile savedText = storageManager.saveFile(textStream, "text/plain");
-
-            ItemFile textFile = new ItemFile();
-            textFile.setFilePath(savedText.getRelativePath());
-            textFile.setFileName(savedText.getFileName());
-            textFile.setFileType("TEXT");
-            textFile.setFileSize(savedText.getFileSize());
-            textFile.setMimeType(savedText.getMimeType());
-            textFile.setCreatedAt(System.currentTimeMillis());
-            files.add(textFile);
-        }
-
-        // 3. アイテムを作成
-        Item item = new Item();
-        item.setDescription(memoText);
-        item.setCreatedAt(System.currentTimeMillis());
-        item.setUpdatedAt(System.currentTimeMillis());
-
-        repository.createItem(item, files, tagIds, new ItemRepository.OnItemCreatedListener() {
-            @Override
-            public void onSuccess(long itemId) {
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "保存しました", Toast.LENGTH_SHORT).show();
-                    // UIをリセット
-                    binding.Textbox.setText("");
-                    photoUri = null;
-                });
-            }
-
-            @Override
-            public void onError(Exception e) {
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "保存に失敗しました", Toast.LENGTH_SHORT).show();
-                });
-            }
-        });
-
-    } catch (IOException e) {
-        Toast.makeText(requireContext(), "ファイル保存エラー", Toast.LENGTH_SHORT).show();
-    }
-}
-```
-
-#### ステップ4.2: DashboardFragmentの更新
-
-ファイル一覧の取得ロジックを新しいRepositoryを使用するように変更します。
-
-```java
-// 新しい一覧取得処理
-private void loadItems(Long tagId) {
-    ItemRepository repository = new ItemRepository(requireContext());
-    LiveData<List<ItemWithFilesAndTags>> itemsLiveData;
-
-    if (tagId == null) {
-        // すべてのアイテムを取得
-        itemsLiveData = repository.getAllItems();
-    } else {
-        // タグでフィルタリング
-        itemsLiveData = repository.getItemsByTag(tagId);
-    }
-
-    itemsLiveData.observe(getViewLifecycleOwner(), items -> {
-        // RecyclerViewを更新
-        adapter.setItems(items);
     });
 }
 ```
 
-#### ステップ4.3: RecyclerViewアダプターの更新
-
-`FileAdapter` を `ItemAdapter` に変更し、アイテム単位の表示に対応します。
-
+3. **ファイル読み込みエラー**
 ```java
-public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
-    private List<ItemWithFilesAndTags> items;
-    private final Context context;
-    private final OnItemClickListener listener;
+private void openFile(ItemFile file) {
+    try {
+        File physicalFile = storageManager.getFile(file.getFilePath());
 
-    public ItemAdapter(Context context, OnItemClickListener listener) {
-        this.context = context;
-        this.listener = listener;
-        this.items = new ArrayList<>();
-    }
-
-    public void setItems(List<ItemWithFilesAndTags> items) {
-        this.items = items;
-        notifyDataSetChanged();
-    }
-
-    @NonNull
-    @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-            .inflate(R.layout.item_card, parent, false);
-        return new ViewHolder(view);
-    }
-
-    @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        ItemWithFilesAndTags item = items.get(position);
-        holder.bind(item, listener);
-    }
-
-    @Override
-    public int getItemCount() {
-        return items.size();
-    }
-
-    public static class ViewHolder extends RecyclerView.ViewHolder {
-        // ViewHolder実装
-        public void bind(ItemWithFilesAndTags item, OnItemClickListener listener) {
-            // アイテム情報をバインド
+        if (!physicalFile.exists()) {
+            Toast.makeText(requireContext(), "ファイルが見つかりません", Toast.LENGTH_SHORT).show();
+            return;
         }
-    }
 
-    public interface OnItemClickListener {
-        void onItemClick(ItemWithFilesAndTags item);
+        Uri fileUri = FileProvider.getUriForFile(
+            requireContext(),
+            "jp.ac.meijou.android.nanndatteii.fileprovider",
+            physicalFile
+        );
+
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(fileUri, file.getMimeType());
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        startActivity(intent);
+
+    } catch (Exception e) {
+        Log.e("DashboardFragment", "ファイルオープンエラー", e);
+        Toast.makeText(requireContext(), "ファイルを開けません", Toast.LENGTH_SHORT).show();
     }
 }
 ```
 
-#### ステップ4.4: 既存のAppDatabaseHelperの段階的置き換え
-
-既存の`AppDatabaseHelper`を使用している箇所を、段階的に新しいRepositoryに置き換えます。
-
-1. まず新しい実装を並行して動作させる
-2. 動作確認後、旧実装を削除
-3. `AppDatabaseHelper.java`を削除
-
 ---
 
-### Phase 5: テストと最適化（3-5日）
+## テストチェックリスト
 
-#### ステップ5.1: 単体テスト
+### 単体テスト
+- [ ] ItemDaoのCRUD操作
+- [ ] FileDaoのCRUD操作
+- [ ] TagDaoのCRUD操作
+- [ ] ItemTagDaoのCRUD操作
+- [ ] FileStorageManagerのファイル保存
+- [ ] FileStorageManagerのファイル取得
+- [ ] FileStorageManagerのファイル削除
 
-- DAOのテスト
-- Repositoryのテスト
-- FileStorageManagerのテスト
+### 統合テスト
+- [ ] 新規アイテム作成（写真+メモ+タグ）
+- [ ] タグによるフィルタリング
+- [ ] アイテム削除（DB+物理ファイル）
+- [ ] 複数タグの付与と検索
+- [ ] 閲覧履歴の更新
 
-#### ステップ5.2: 統合テスト
+### パフォーマンステスト
+- [ ] 1000件のアイテム読み込み速度
+- [ ] RecyclerViewのスクロール性能
+- [ ] メモリ使用量の確認
+- [ ] データベースクエリの最適化確認
 
-- 新規アイテム作成テスト
-- タグによるフィルタリングテスト
-- ファイル削除テスト
-- 複数タグの付与テスト
-
-#### ステップ5.3: パフォーマンステスト
-
-- 大量ファイルの読み込み速度
-- データベースクエリの最適化
-- メモリ使用量の確認
-
----
-
-## タイムライン
-
-| フェーズ | 作業内容 | 期間 |
-|---------|---------|------|
-| Phase 0 | 準備 | 1-2日 |
-| Phase 1 | データベース実装 | 3-5日 |
-| Phase 2 | ファイルストレージ実装 | 2-3日 |
-| Phase 3 | リポジトリパターン実装 | 2-3日 |
-| Phase 4 | UI層更新 | 5-7日 |
-| Phase 5 | テスト・最適化 | 3-5日 |
-| **合計** | | **16-25日** |
-
----
-
-## 注意事項
-
-1. **段階的実装**: 各Phaseごとに動作確認を行い、問題があれば前のPhaseに戻る
-2. **並行動作**: Phase 4では新旧実装を並行して動作させ、安全に移行
-3. **テストの重要性**: Phase 5で十分なテストを実施してから本番利用
+### エラーハンドリング
+- [ ] ストレージ容量不足時の処理
+- [ ] データベースエラー時のロールバック
+- [ ] ファイル読み込み失敗時の処理
+- [ ] ネットワークエラー時の処理（将来的な拡張）
 
 ---
 
 ## 次のステップ
 
-1. `database-design.md` を読み、Entity・DAOの実装を開始
-2. `file-storage-design.md` を読み、FileStorageManagerの実装を開始
-3. Phase 0の依存関係追加から着手
+Phase 5のテストと最適化を完了したら、以下の拡張機能を検討できます：
 
-実装中に不明点があれば、設計書を参照するか、追加の質問をしてください。
+1. **自動解析機能**: ML Kitを使用した画像認識
+2. **クラウド同期**: Firebase Storageとの連携
+3. **エクスポート機能**: ZIPファイルでのバックアップ
+4. **検索機能**: 全文検索の実装
+
+詳細は `database-usage-guide.md` と各設計書を参照してください。

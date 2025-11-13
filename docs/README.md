@@ -4,6 +4,20 @@
 
 このディレクトリには、「投げたっていい。」アプリのファイル保存・データベース設計に関するドキュメントが格納されています。
 
+## 実装状況
+
+現在、以下のフェーズが完了しています：
+
+- Phase 0: Room依存関係の追加
+- Phase 1: データベース実装（Entity、DAO、Relation、AppDatabase）
+- Phase 2: ファイルストレージ実装（FileStorageManager）
+- Phase 3: リポジトリパターン実装（ItemRepository、TagRepository）
+- Phase 4: UI層更新（HomeFragment、DashboardFragment、ItemAdapter）
+
+次のステップは Phase 5（テストと最適化）です。
+
+---
+
 ## ドキュメント一覧
 
 ### 1. [database-design.md](./database-design.md)
@@ -35,24 +49,39 @@
 - 型別整理（images, texts, documents, videos, others）
 - セキュアなプライベートストレージの活用
 
-### 3. [implementation-guide.md](./implementation-guide.md)
-**実装ガイド**
+### 3. [database-usage-guide.md](./database-usage-guide.md)
+**データベース使用ガイド**（実装済み機能の使い方）
 
-- Phase 0～5 の詳細な実装手順
-- Repository パターンの実装
-- UI層の更新ガイド
-- テスト戦略
+- 現在のデータベースの仕組み
+- Repository パターンの使い方
+- FileStorageManager の使い方
+- 実装例とコードサンプル
 
 **主なポイント:**
-- 段階的な実装アプローチ
-- 16-25日の実装タイムライン
-- 既存コードとの並行動作による安全な移行
+- ItemRepository と TagRepository の使い方
+- アイテム作成・取得・削除の実装例
+- ファイル保存・取得の実装例
+- LiveData によるUI更新の実装方法
+
+### 4. [implementation-guide.md](./implementation-guide.md)
+**実装ガイド**（次のステップ）
+
+- Phase 5 の詳細な実装手順（テストと最適化）
+- テスト戦略
+- パフォーマンス最適化
+- エラーハンドリング
+
+**主なポイント:**
+- 単体テスト・統合テストの実装方法
+- パフォーマンステストとクエリ最適化
+- 孤立ファイルのクリーンアップ
+- エラーハンドリングのベストプラクティス
 
 ---
 
 ## 設計の背景
 
-### 現状の問題点
+### 旧実装の問題点
 
 従来の実装では:
 1. タグ別フォルダにファイルが散らばる
@@ -110,10 +139,10 @@
 
 ### Entity（エンティティ）
 
-- **Item**: 投稿の基本情報
-- **ItemFile**: ファイルの詳細情報
-- **Tag**: タグマスター
-- **ItemTag**: アイテムとタグの関連
+- **Item**: 投稿の基本情報（id, description, created_at, updated_at, last_viewed）
+- **ItemFile**: ファイルの詳細情報（id, item_id, file_path, file_name, file_type, file_size, mime_type, created_at）
+- **Tag**: タグマスター（id, name, color, created_at）
+- **ItemTag**: アイテムとタグの関連（item_id, tag_id）
 
 ### Relation（リレーション）
 
@@ -125,7 +154,7 @@
 
 ## ファイル構造
 
-### 新しいストレージ構造
+### ストレージ構造
 
 ```
 /data/data/jp.ac.meijou.android.nanndatteii/files/
@@ -154,66 +183,55 @@ app_data.db (Room Database)
 
 ---
 
-## 実装の開始方法
+## プロジェクト構造
 
-### 1. ドキュメントを読む
-
-1. **database-design.md** でデータベース設計を理解
-2. **file-storage-design.md** でファイルストレージを理解
-3. **implementation-guide.md** で実装手順を確認
-
-### 2. Phase 0 から開始
-
-```gradle
-// gradle/libs.versions.toml に Room を追加
-[versions]
-room = "2.6.1"
-
-[libraries]
-androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 ```
-
-### 3. Entity クラスから実装
-
-```java
-// db/entity/Item.java から作成開始
-@Entity(tableName = "items")
-public class Item {
-    @PrimaryKey(autoGenerate = true)
-    private long id;
-    // ...
-}
+app/src/main/java/jp/ac/meijou/android/nanndatteii/
+├── db/
+│   ├── AppDatabase.java
+│   ├── dao/
+│   │   ├── ItemDao.java
+│   │   ├── FileDao.java
+│   │   ├── TagDao.java
+│   │   └── ItemTagDao.java
+│   ├── entity/
+│   │   ├── Item.java
+│   │   ├── ItemFile.java
+│   │   ├── Tag.java
+│   │   └── ItemTag.java
+│   └── relation/
+│       ├── ItemWithFiles.java
+│       ├── ItemWithTags.java
+│       └── ItemWithFilesAndTags.java
+├── storage/
+│   ├── FileStorageManager.java
+│   └── SavedFile.java
+├── repository/
+│   ├── ItemRepository.java
+│   └── TagRepository.java
+└── ui/
+    ├── home/
+    │   └── HomeFragment.java
+    └── dashboard/
+        ├── DashboardFragment.java
+        └── ItemAdapter.java
 ```
-
-### 4. 段階的に実装
-
-Phase 0 → Phase 1 → ... → Phase 5 の順に実装し、各Phaseごとに動作確認を行います。
 
 ---
 
-## テスト計画
+## 使い方
 
-### 単体テスト
+### 1. 現在の機能を理解する
 
-- [ ] ItemDao のCRUD操作
-- [ ] FileDao のCRUD操作
-- [ ] TagDao のCRUD操作
-- [ ] ItemTagDao のCRUD操作
-- [ ] FileStorageManager のファイル操作
+`database-usage-guide.md` を読んで、実装済みのデータベースとRepositoryの使い方を理解してください。
 
-### 統合テスト
+### 2. 開発を進める
 
-- [ ] アイテム作成（複数ファイル + タグ）
-- [ ] タグによるフィルタリング
-- [ ] アイテム削除（ファイルも削除）
-- [ ] 孤立ファイルのクリーニング
+アプリケーションの開発を継続し、必要に応じて機能を追加してください。
 
-### パフォーマンステスト
+### 3. テストと最適化
 
-- [ ] 1000件のアイテム読み込み速度
-- [ ] 画像のキャッシュ動作
-- [ ] メモリ使用量の確認
+`implementation-guide.md` を参照して、Phase 5（テストと最適化）を実施してください。
 
 ---
 
@@ -240,6 +258,14 @@ public class AutoAnalysis {
 }
 ```
 
+### その他の拡張機能
+
+1. **検索機能**: 全文検索の実装
+2. **エクスポート機能**: ZIPファイルでのバックアップ
+3. **クラウド同期**: Firebase Storageとの連携
+4. **画像編集**: トリミング・フィルター機能
+5. **共有機能**: SNSへの投稿
+
 ---
 
 ## 参考リンク
@@ -248,6 +274,7 @@ public class AutoAnalysis {
 - [Android Data Storage](https://developer.android.com/training/data-storage)
 - [FileProvider](https://developer.android.com/reference/androidx/core/content/FileProvider)
 - [LiveData Overview](https://developer.android.com/topic/libraries/architecture/livedata)
+- [Repository Pattern](https://developer.android.com/topic/architecture/data-layer)
 
 ---
 
@@ -256,6 +283,7 @@ public class AutoAnalysis {
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-01-13 | 1.0.0 | 初版作成（データベース・ファイルストレージ設計） |
+| 2025-01-13 | 2.0.0 | Phase 0-4 実装完了、ドキュメント更新 |
 
 ---
 
