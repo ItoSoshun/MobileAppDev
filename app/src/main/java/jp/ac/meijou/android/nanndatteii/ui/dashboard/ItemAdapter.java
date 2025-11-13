@@ -60,7 +60,7 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
-            fileName = itemView.findViewById(R.id.file_name);
+            fileName = itemView.findViewById(R.id.fileName);
             dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault());
         }
 

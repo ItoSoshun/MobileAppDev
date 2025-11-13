@@ -44,6 +44,7 @@ public abstract class AppDatabase extends RoomDatabase {
                         AppDatabase.class,
                         "app_data.db"
                     )
+                    .fallbackToDestructiveMigration()
                     .addCallback(new Callback() {
                         @Override
                         public void onCreate(@NonNull SupportSQLiteDatabase db) {

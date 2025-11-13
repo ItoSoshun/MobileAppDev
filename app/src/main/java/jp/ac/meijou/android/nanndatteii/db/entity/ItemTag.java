@@ -3,6 +3,7 @@ package jp.ac.meijou.android.nanndatteii.db.entity;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
+import androidx.room.Ignore;
 import androidx.room.Index;
 
 @Entity(tableName = "item_tags",
@@ -36,6 +37,7 @@ public class ItemTag {
     public ItemTag() {
     }
 
+    @Ignore
     public ItemTag(long itemId, long tagId) {
         this.itemId = itemId;
         this.tagId = tagId;
