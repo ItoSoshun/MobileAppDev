@@ -1,12 +1,10 @@
 package jp.ac.meijou.android.nanndatteii.ui.home;
 
-import static android.net.Uri.fromFile;
 
 import android.Manifest;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -23,16 +21,13 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -52,6 +47,7 @@ import java.util.ArrayList;
 
 public class HomeFragment extends Fragment
 {
+    private static final String TAG = "HomeFragment";
     private FragmentHomeBinding binding;
     private Uri photoUri;
     private String memoText = ""; // [必須] メモ内容を保持する変数
@@ -119,14 +115,8 @@ public class HomeFragment extends Fragment
             }
         );
 
-        // パーミッションの確認とリクエスト（CAMERAのみ）
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
-        {
-            requestPermissions(
-                new String[]{Manifest.permission.CAMERA},
-                100
-            );
-        }
+        // パーミッションの確認とリクエスト
+        checkAndRequestPermissions();
 
         Button openCameraButton = binding.OpenCamera;
 
@@ -299,17 +289,22 @@ public class HomeFragment extends Fragment
      * 新しいアイテムを保存（写真 + メモ）
      */
     private void saveNewItem() {
+        Log.d(TAG, "saveNewItem: 開始");
         String memoText = binding.Textbox.getText() != null ? binding.Textbox.getText().toString() : "";
+        Log.d(TAG, "saveNewItem: メモテキスト: " + memoText);
+        Log.d(TAG, "saveNewItem: 選択中のタグID: " + currentTagId);
 
         // タグが選択されていない場合
         if (currentTagId == null) {
             Toast.makeText(requireContext(), "タグを選択してください", Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "saveNewItem: タグが選択されていません。");
             return;
         }
 
         // 写真もメモも空の場合
         if (photoUri == null && memoText.trim().isEmpty()) {
             Toast.makeText(requireContext(), "写真またはメモを入力してください", Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "saveNewItem: 写真もメモも空です。");
             return;
         }
 
@@ -320,9 +315,11 @@ public class HomeFragment extends Fragment
         try {
             // 1. 写真を保存
             if (photoUri != null) {
+                Log.d(TAG, "saveNewItem: 写真を保存します。URI: " + photoUri);
                 InputStream photoStream = requireContext().getContentResolver().openInputStream(photoUri);
                 if (photoStream != null) {
                     SavedFile savedPhoto = fileStorageManager.saveFile(photoStream, "image/jpeg");
+                    Log.d(TAG, "saveNewItem: 写真の保存成功: " + savedPhoto.getRelativePath());
 
                     ItemFile photoFile = new ItemFile();
                     photoFile.setFilePath(savedPhoto.getRelativePath());
@@ -334,14 +331,18 @@ public class HomeFragment extends Fragment
                     files.add(photoFile);
 
                     photoStream.close();
+                } else {
+                    Log.w(TAG, "saveNewItem: photoStreamがnullです。");
                 }
             }
 
             // 2. メモを保存
             if (!memoText.trim().isEmpty()) {
+                Log.d(TAG, "saveNewItem: メモを保存します。");
                 byte[] textBytes = memoText.getBytes(StandardCharsets.UTF_8);
                 InputStream textStream = new ByteArrayInputStream(textBytes);
                 SavedFile savedText = fileStorageManager.saveFile(textStream, "text/plain");
+                Log.d(TAG, "saveNewItem: メモの保存成功: " + savedText.getRelativePath());
 
                 ItemFile textFile = new ItemFile();
                 textFile.setFilePath(savedText.getRelativePath());
@@ -360,10 +361,12 @@ public class HomeFragment extends Fragment
             item.setDescription(memoText);
             item.setCreatedAt(System.currentTimeMillis());
             item.setUpdatedAt(System.currentTimeMillis());
+            Log.d(TAG, "saveNewItem: ItemRepository.createItemを呼び出します。");
 
             itemRepository.createItem(item, files, tagIds, new ItemRepository.OnItemCreatedListener() {
                 @Override
                 public void onSuccess(long itemId) {
+                    Log.d(TAG, "onSuccess: アイテムの保存に成功。ItemID: " + itemId);
                     requireActivity().runOnUiThread(() -> {
                         Toast.makeText(requireContext(), "保存しました", Toast.LENGTH_SHORT).show();
                         // UIをリセット
@@ -374,6 +377,7 @@ public class HomeFragment extends Fragment
 
                 @Override
                 public void onError(Exception e) {
+                    Log.e(TAG, "onError: アイテムの保存に失敗。", e);
                     requireActivity().runOnUiThread(() -> {
                         Toast.makeText(requireContext(), "保存に失敗しました: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
@@ -381,7 +385,42 @@ public class HomeFragment extends Fragment
             });
 
         } catch (IOException e) {
+            Log.e(TAG, "saveNewItem: ファイル保存中にIOExceptionが発生しました。", e);
             Toast.makeText(requireContext(), "ファイル保存エラー: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * パーミッションの確認とリクエスト
+     */
+    private void checkAndRequestPermissions() {
+        java.util.ArrayList<String> permissionsToRequest = new java.util.ArrayList<>();
+
+        // カメラパーミッション
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.CAMERA);
+        }
+
+        // 写真読み取りパーミッション（カメラで撮影した写真を読み込むため）
+        // Android 13以降
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES);
+            }
+        }
+        // Android 12以下
+        else if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.S_V2) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+        }
+
+        // パーミッションリクエスト
+        if (!permissionsToRequest.isEmpty()) {
+            requestPermissions(
+                permissionsToRequest.toArray(new String[0]),
+                100
+            );
         }
     }
 
