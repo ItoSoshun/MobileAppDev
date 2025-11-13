@@ -21,7 +21,6 @@
 2. **LiveData統合**: リアクティブなUI更新が容易
 3. **メンテナンス性**: ボイラープレートコードの削減
 4. **Androidベストプラクティス**: Google推奨のJetpack Architecture Component
-5. **マイグレーション管理**: バージョン管理が容易
 
 ## データベーススキーマ
 
@@ -504,65 +503,6 @@ public class ItemWithFilesAndTags {
     public List<Tag> tags;
 }
 ```
-
----
-
-## マイグレーション戦略
-
-既存のSQLiteデータベースからRoomへの移行手順:
-
-### Phase 1: 既存データの保持
-
-```java
-static final Migration MIGRATION_1_2 = new Migration(1, 2) {
-    @Override
-    public void migrate(@NonNull SupportSQLiteDatabase database) {
-        // 1. 新しいテーブルを作成
-        database.execSQL("CREATE TABLE IF NOT EXISTS items (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-            "title TEXT, " +
-            "description TEXT, " +
-            "created_at INTEGER NOT NULL, " +
-            "updated_at INTEGER NOT NULL, " +
-            "last_viewed INTEGER)");
-
-        database.execSQL("CREATE TABLE IF NOT EXISTS files (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-            "item_id INTEGER NOT NULL, " +
-            "file_path TEXT NOT NULL, " +
-            "file_name TEXT NOT NULL, " +
-            "file_type TEXT NOT NULL, " +
-            "file_size INTEGER NOT NULL, " +
-            "mime_type TEXT NOT NULL, " +
-            "created_at INTEGER NOT NULL, " +
-            "FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE)");
-
-        database.execSQL("CREATE TABLE IF NOT EXISTS item_tags (" +
-            "item_id INTEGER NOT NULL, " +
-            "tag_id INTEGER NOT NULL, " +
-            "PRIMARY KEY(item_id, tag_id), " +
-            "FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE, " +
-            "FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE)");
-
-        // 2. 既存のtagsテーブルにカラムを追加
-        database.execSQL("ALTER TABLE tags ADD COLUMN color TEXT");
-        database.execSQL("ALTER TABLE tags ADD COLUMN created_at INTEGER DEFAULT 0");
-
-        // 3. インデックスを作成
-        database.execSQL("CREATE INDEX idx_items_created_at ON items(created_at)");
-        database.execSQL("CREATE INDEX idx_items_last_viewed ON items(last_viewed)");
-        database.execSQL("CREATE INDEX idx_files_item_id ON files(item_id)");
-        database.execSQL("CREATE INDEX idx_files_file_type ON files(file_type)");
-        database.execSQL("CREATE INDEX idx_tags_name ON tags(name)");
-        database.execSQL("CREATE INDEX idx_item_tags_item_id ON item_tags(item_id)");
-        database.execSQL("CREATE INDEX idx_item_tags_tag_id ON item_tags(tag_id)");
-    }
-};
-```
-
-### Phase 2: 既存ファイルのインポート
-
-別途、既存のタグ別フォルダから新しいデータベース構造へファイルをインポートするバッチ処理を実装します（実装ガイドで詳述）。
 
 ---
 
