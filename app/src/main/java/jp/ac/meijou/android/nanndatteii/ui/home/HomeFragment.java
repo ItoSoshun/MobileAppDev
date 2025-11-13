@@ -38,7 +38,6 @@ import java.util.List;
 
 import jp.ac.meijou.android.nanndatteii.databinding.FragmentHomeBinding;
 import jp.ac.meijou.android.nanndatteii.R;
-import jp.ac.meijou.android.nanndatteii.db.AppDatabaseHelper;
 import jp.ac.meijou.android.nanndatteii.db.entity.Item;
 import jp.ac.meijou.android.nanndatteii.db.entity.ItemFile;
 import jp.ac.meijou.android.nanndatteii.db.entity.Tag;
@@ -69,9 +68,6 @@ public class HomeFragment extends Fragment
     private ItemRepository itemRepository;
     private FileStorageManager fileStorageManager;
 
-    // 旧実装（段階的に削除予定）
-    private AppDatabaseHelper dbHelper;
-
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState)
@@ -86,7 +82,6 @@ public class HomeFragment extends Fragment
         tagRepository = new TagRepository(requireContext());
         itemRepository = new ItemRepository(requireContext());
         fileStorageManager = new FileStorageManager(requireContext());
-        dbHelper = new AppDatabaseHelper(requireContext());
 
         // タグリストをSpinnerで表示
         final List<Tag>[] tagsList = new List[]{new ArrayList<>()};
