@@ -39,6 +39,17 @@ import java.util.List;
 import jp.ac.meijou.android.nanndatteii.databinding.FragmentHomeBinding;
 import jp.ac.meijou.android.nanndatteii.R;
 import jp.ac.meijou.android.nanndatteii.db.AppDatabaseHelper;
+import jp.ac.meijou.android.nanndatteii.db.entity.Item;
+import jp.ac.meijou.android.nanndatteii.db.entity.ItemFile;
+import jp.ac.meijou.android.nanndatteii.db.entity.Tag;
+import jp.ac.meijou.android.nanndatteii.repository.ItemRepository;
+import jp.ac.meijou.android.nanndatteii.repository.TagRepository;
+import jp.ac.meijou.android.nanndatteii.storage.FileStorageManager;
+import jp.ac.meijou.android.nanndatteii.storage.SavedFile;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
 
 public class HomeFragment extends Fragment
 {
@@ -48,9 +59,18 @@ public class HomeFragment extends Fragment
 
     // currentTagはAdd_Tagボタンで更新される変数とする
     private String currentTag;
+    private Long currentTagId; // 選択中のタグID
 
     // カメラ起動用ランチャー
     private ActivityResultLauncher<Intent> cameraLauncher;
+
+    // 新しいRepository層
+    private TagRepository tagRepository;
+    private ItemRepository itemRepository;
+    private FileStorageManager fileStorageManager;
+
+    // 旧実装（段階的に削除予定）
+    private AppDatabaseHelper dbHelper;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -62,18 +82,31 @@ public class HomeFragment extends Fragment
         binding = FragmentHomeBinding.inflate(inflater, container, false);
         View root = binding.getRoot();
 
-        // DBからタグ一覧を読み込み、Spinnerにセットする（adapterを後で再利用）
-        final AppDatabaseHelper dbHelper = new AppDatabaseHelper(requireContext());
-        List<String> initialTags = dbHelper.getAllTags();
-        if (initialTags == null) initialTags = new java.util.ArrayList<>();
-        final ArrayAdapter<String>[] spinnerAdapter = new ArrayAdapter[1];
-        spinnerAdapter[0] = new ArrayAdapter<>(
+        // Repositoryとストレージマネージャーを初期化
+        tagRepository = new TagRepository(requireContext());
+        itemRepository = new ItemRepository(requireContext());
+        fileStorageManager = new FileStorageManager(requireContext());
+        dbHelper = new AppDatabaseHelper(requireContext());
+
+        // タグリストをSpinnerで表示
+        final List<Tag>[] tagsList = new List[]{new ArrayList<>()};
+        final ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(
             requireContext(),
             android.R.layout.simple_spinner_item,
-            initialTags
+            new ArrayList<>()
         );
-        spinnerAdapter[0].setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        binding.HomeTagSet.setAdapter(spinnerAdapter[0]);
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        binding.HomeTagSet.setAdapter(spinnerAdapter);
+
+        // TagRepositoryからタグ一覧を取得してSpinnerに反映
+        tagRepository.getAllTags().observe(getViewLifecycleOwner(), tags -> {
+            tagsList[0] = tags;
+            spinnerAdapter.clear();
+            for (Tag tag : tags) {
+                spinnerAdapter.add(tag.getName());
+            }
+            spinnerAdapter.notifyDataSetChanged();
+        });
 
 
         final TextView textView = binding.textHome;
@@ -141,66 +174,33 @@ public class HomeFragment extends Fragment
                 return;
             }
 
-            dbHelper.insertTag(tagName);
+            // 新しい実装: TagRepositoryを使用
+            Tag newTag = new Tag();
+            newTag.setName(tagName);
+            newTag.setCreatedAt(System.currentTimeMillis());
 
-            // プルダウンを最新化（adapterを使い回す）
-            List<String> newTags = dbHelper.getAllTags();
-            if (newTags == null) newTags = new java.util.ArrayList<>();
-            spinnerAdapter[0].clear();
-            spinnerAdapter[0].addAll(newTags);
-            spinnerAdapter[0].notifyDataSetChanged();
-            int pos = spinnerAdapter[0].getPosition(tagName);
-            if (pos >= 0) binding.HomeTagSet.setSelection(pos);
+            tagRepository.insertTag(newTag, new TagRepository.OnTagInsertedListener() {
+                @Override
+                public void onSuccess(long tagId) {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(requireContext(), "タグを追加しました", Toast.LENGTH_SHORT).show();
+                        binding.TextTag.setText("");
+                        // LiveDataが自動更新するのでSpinnerは自動で更新される
+                    });
+                }
 
-            Toast.makeText(requireContext(), "タグを追加しました", Toast.LENGTH_SHORT).show();
-            binding.TextTag.setText("");
+                @Override
+                public void onError(Exception e) {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(requireContext(), "エラー: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
         });
 
-        // SendButton: HomeTagSet に表示されたタグ名のフォルダへ Textbox の内容をテキストファイルとして保存する
+        // SendButton: 写真とメモを一つのアイテムとして保存
         binding.SendButton.setOnClickListener(v -> {
-            // Spinner の選択優先（HomeTagSet に表示されたタグ名を使う）
-            String selectedTag = null;
-            if (binding.HomeTagSet.getSelectedItem() != null) {
-                selectedTag = binding.HomeTagSet.getSelectedItem().toString();
-            }
-            if (selectedTag == null || selectedTag.trim().isEmpty()) {
-                // fallback to currentTag
-                selectedTag = (currentTag != null) ? currentTag : requireContext().getString(R.string.Tags);
-            }
-
-            String memo = binding.Textbox.getText() != null ? binding.Textbox.getText().toString() : "";
-
-            String folderName = requireContext().getString(R.string.photo_folder_name);
-            String relativePath = "Download/" + folderName + "/" + selectedTag;
-
-            String timeStamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
-            String fileName = selectedTag + "_" + timeStamp + ".txt";
-
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-            values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
-            values.put(MediaStore.Downloads.RELATIVE_PATH, relativePath);
-
-            Uri textUri = null;
-            try {
-                textUri = requireContext().getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-            } catch (Exception e) {
-                Log.e("HomeFragment", "MediaStore insert error", e);
-            }
-
-            if (textUri == null) {
-                Toast.makeText(requireContext(), "保存先の作成に失敗しました。", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            try (OutputStream os = requireContext().getContentResolver().openOutputStream(textUri)) {
-                os.write(memo.getBytes(StandardCharsets.UTF_8));
-                os.flush();
-                Toast.makeText(requireContext(), "メモを保存しました: " + folderName + "/" + selectedTag, Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Log.e("HomeFragment", "メモ保存エラー", e);
-                Toast.makeText(requireContext(), "メモの保存に失敗しました: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
+            saveNewItem();
         });
 
         Button openFolderButton = binding.OpenFolder;
@@ -256,36 +256,138 @@ public class HomeFragment extends Fragment
         });
 
         binding.DeleteTag.setOnClickListener(v -> {
-            String selectedTag = binding.HomeTagSet.getSelectedItem().toString();
-            if (selectedTag.isEmpty()) {
+            if (binding.HomeTagSet.getSelectedItem() == null) {
                 Toast.makeText(getContext(), "タグを選択してください", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            dbHelper.deleteTag(selectedTag);
+            String selectedTagName = binding.HomeTagSet.getSelectedItem().toString();
+            tagRepository.deleteTagByName(selectedTagName, new TagRepository.OnTagDeletedListener() {
+                @Override
+                public void onSuccess() {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "タグを削除しました", Toast.LENGTH_SHORT).show();
+                        currentTagId = null;
+                        currentTag = null;
+                    });
+                }
 
-            // プルダウンを最新化（adapterを使い回す）
-            List<String> tags = dbHelper.getAllTags();
-            if (tags == null) tags = new java.util.ArrayList<>();
-            spinnerAdapter[0].clear();
-            spinnerAdapter[0].addAll(tags);
-            spinnerAdapter[0].notifyDataSetChanged();
-
-            Toast.makeText(getContext(), "タグを削除しました", Toast.LENGTH_SHORT).show();
+                @Override
+                public void onError(Exception e) {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "削除エラー: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
         });
 
         binding.HomeTagSet.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                currentTag = parent.getItemAtPosition(position).toString();
+                if (position >= 0 && position < tagsList[0].size()) {
+                    Tag selectedTag = tagsList[0].get(position);
+                    currentTag = selectedTag.getName();
+                    currentTagId = selectedTag.getId();
+                }
             }
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {
-                // 何もしない
+                currentTagId = null;
+                currentTag = null;
             }
         });
 
         return root;
+    }
+
+    /**
+     * 新しいアイテムを保存（写真 + メモ）
+     */
+    private void saveNewItem() {
+        String memoText = binding.Textbox.getText() != null ? binding.Textbox.getText().toString() : "";
+
+        // タグが選択されていない場合
+        if (currentTagId == null) {
+            Toast.makeText(requireContext(), "タグを選択してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 写真もメモも空の場合
+        if (photoUri == null && memoText.trim().isEmpty()) {
+            Toast.makeText(requireContext(), "写真またはメモを入力してください", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        List<ItemFile> files = new ArrayList<>();
+        List<Long> tagIds = new ArrayList<>();
+        tagIds.add(currentTagId);
+
+        try {
+            // 1. 写真を保存
+            if (photoUri != null) {
+                InputStream photoStream = requireContext().getContentResolver().openInputStream(photoUri);
+                if (photoStream != null) {
+                    SavedFile savedPhoto = fileStorageManager.saveFile(photoStream, "image/jpeg");
+
+                    ItemFile photoFile = new ItemFile();
+                    photoFile.setFilePath(savedPhoto.getRelativePath());
+                    photoFile.setFileName(savedPhoto.getFileName());
+                    photoFile.setFileType("IMAGE");
+                    photoFile.setFileSize(savedPhoto.getFileSize());
+                    photoFile.setMimeType(savedPhoto.getMimeType());
+                    photoFile.setCreatedAt(System.currentTimeMillis());
+                    files.add(photoFile);
+
+                    photoStream.close();
+                }
+            }
+
+            // 2. メモを保存
+            if (!memoText.trim().isEmpty()) {
+                byte[] textBytes = memoText.getBytes(StandardCharsets.UTF_8);
+                InputStream textStream = new ByteArrayInputStream(textBytes);
+                SavedFile savedText = fileStorageManager.saveFile(textStream, "text/plain");
+
+                ItemFile textFile = new ItemFile();
+                textFile.setFilePath(savedText.getRelativePath());
+                textFile.setFileName(savedText.getFileName());
+                textFile.setFileType("TEXT");
+                textFile.setFileSize(savedText.getFileSize());
+                textFile.setMimeType(savedText.getMimeType());
+                textFile.setCreatedAt(System.currentTimeMillis());
+                files.add(textFile);
+
+                textStream.close();
+            }
+
+            // 3. アイテムを作成
+            Item item = new Item();
+            item.setDescription(memoText);
+            item.setCreatedAt(System.currentTimeMillis());
+            item.setUpdatedAt(System.currentTimeMillis());
+
+            itemRepository.createItem(item, files, tagIds, new ItemRepository.OnItemCreatedListener() {
+                @Override
+                public void onSuccess(long itemId) {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(requireContext(), "保存しました", Toast.LENGTH_SHORT).show();
+                        // UIをリセット
+                        binding.Textbox.setText("");
+                        photoUri = null;
+                    });
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(requireContext(), "保存に失敗しました: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+
+        } catch (IOException e) {
+            Toast.makeText(requireContext(), "ファイル保存エラー: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
