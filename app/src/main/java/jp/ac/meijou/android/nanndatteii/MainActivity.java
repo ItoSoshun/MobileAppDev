@@ -4,7 +4,7 @@ import android.os.Bundle;
 import android.os.Environment;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-
+import androidx.core.splashscreen.SplashScreen;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
@@ -22,6 +22,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());

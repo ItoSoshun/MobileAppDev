@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -118,9 +119,9 @@ public class HomeFragment extends Fragment
         // パーミッションの確認とリクエスト
         checkAndRequestPermissions();
 
-        Button openCameraButton = binding.OpenCamera;
+        ImageButton openCameraImageButton = binding.OpenCamera;
 
-        openCameraButton.setOnClickListener(v -> {
+        openCameraImageButton.setOnClickListener(v -> {
             // [必須] Tags名のサブフォルダに保存
             File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
             String folderName = requireContext().getString(R.string.photo_folder_name);
