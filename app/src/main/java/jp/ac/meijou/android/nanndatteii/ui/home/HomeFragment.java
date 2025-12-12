@@ -189,8 +189,8 @@ public class HomeFragment extends Fragment
             saveNewItem();
         });
 
-        Button openFolderButton = binding.OpenFolder;
-        openFolderButton.setOnClickListener(v -> {
+        ImageButton openFolderImageButton = binding.OpenFolder;
+        openFolderImageButton.setOnClickListener(v -> {
             String folderName = requireContext().getString(R.string.photo_folder_name);
             File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
             File targetDir = new File(downloadsDir, folderName);

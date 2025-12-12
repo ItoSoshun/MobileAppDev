@@ -48,11 +48,12 @@
 
         />
 
-    <Button
+    <ImageButton
         android:id="@+id/Open_Folder"
         android:layout_width="100dp"
         android:layout_height="100dp"
-        android:text="Folder"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_folder_foreground"
 
         android:layout_marginBottom="200dp"
 
